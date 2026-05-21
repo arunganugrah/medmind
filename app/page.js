@@ -1,65 +1,276 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+
+/* MedMind — halaman murid (membaca konten dari Firestore) */
+
+const LIGHT = { paper:"#F6F1E7", paperDeep:"#EFE7D6", ink:"#26221C", inkSoft:"#5C564B", green:"#13463D", greenSoft:"#2C6357", terra:"#C8553D", line:"#D9CFBC", card:"#FFFFFF", good:"#2C7A55", bad:"#B23A2E" };
+const DARK  = { paper:"#161512", paperDeep:"#201E1A", ink:"#F0EBE0", inkSoft:"#A8A092", green:"#7FC9B8", greenSoft:"#9BD6C7", terra:"#E08368", line:"#34302A", card:"#1E1C18", good:"#7FCBA0", bad:"#E08A7E" };
+const serif = { fontFamily:"'Fraunces', Georgia, serif" };
+const sans  = { fontFamily:"'Hanken Grotesk', system-ui, sans-serif" };
+
+export default function Page() {
+  const router = useRouter();
+  const [dark, setDark] = useState(false);
+  const [authed, setAuthed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState({ categories: [], subcategories: [], topics: [], quizzes: {} });
+  const [view, setView] = useState({ name: "home" });
+  const C = dark ? DARK : LIGHT;
+
+  // gerbang voucher
+  useEffect(() => {
+    const v = localStorage.getItem("medmind_voucher");
+    if (!v) { router.replace("/login"); return; }
+    setAuthed(true);
+  }, [router]);
+
+  // muat font
+  useEffect(() => {
+    if (!document.getElementById("medmind-fonts")) {
+      const l = document.createElement("link");
+      l.id = "medmind-fonts"; l.rel = "stylesheet";
+      l.href = "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap";
+      document.head.appendChild(l);
+    }
+  }, []);
+  useEffect(() => { document.body.style.background = C.paper; }, [C.paper]);
+
+  // ambil konten dari Firestore
+  useEffect(() => {
+    if (!authed) return;
+    (async () => {
+      try {
+        const [catsS, subsS, topsS, quizS] = await Promise.all([
+          getDocs(collection(db, "categories")),
+          getDocs(collection(db, "subcategories")),
+          getDocs(collection(db, "topics")),
+          getDocs(collection(db, "quizzes")),
+        ]);
+        const categories = catsS.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const subcategories = subsS.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const topics = topsS.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const quizzes = {};
+        quizS.docs.forEach((d) => { quizzes[d.id] = d.data().items || []; });
+        setData({ categories, subcategories, topics, quizzes });
+      } catch (e) {
+        console.error(e);
+        alert("Gagal memuat konten. Cek koneksi & konfigurasi Firebase.");
+      } finally { setLoading(false); }
+    })();
+  }, [authed]);
+
+  const go = (v) => { setView(v); window.scrollTo(0, 0); };
+  const logout = () => { localStorage.removeItem("medmind_voucher"); router.replace("/login"); };
+
+  if (!authed) return null;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div style={{ ...sans, background: C.paper, color: C.ink, minHeight: "100vh" }}>
+      <header style={{ position:"sticky", top:0, zIndex:20, borderBottom:`1px solid ${C.line}`, background:C.paper+"E6", backdropFilter:"blur(8px)" }}>
+        <div style={{ maxWidth:980, margin:"0 auto", padding:"12px 20px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <button onClick={() => go({ name:"home" })} style={{ display:"flex", alignItems:"center", gap:8, background:"none", border:"none", cursor:"pointer" }}>
+            <span style={{ fontSize:20 }}>🧠</span>
+            <span style={{ ...serif, color:C.green, fontSize:20, fontWeight:600 }}>MedMind</span>
+            <span style={{ background:C.terra, color:"#fff", fontSize:10, padding:"2px 6px", borderRadius:999, fontWeight:700 }}>QUIZ</span>
+          </button>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={() => setDark(!dark)} style={{ background:C.card, border:`1px solid ${C.line}`, color:C.ink, borderRadius:10, padding:"6px 12px", cursor:"pointer", fontSize:14 }}>{dark ? "☀️" : "🌙"}</button>
+            <button onClick={logout} style={{ background:"none", border:`1px solid ${C.line}`, color:C.inkSoft, borderRadius:10, padding:"6px 12px", cursor:"pointer", fontSize:14 }}>Keluar</button>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+      </header>
+
+      <main style={{ maxWidth:980, margin:"0 auto", padding:"0 20px 96px" }}>
+        {loading ? (
+          <p style={{ color:C.inkSoft, padding:"60px 0", textAlign:"center" }}>Memuat konten…</p>
+        ) : (
+          <>
+            {view.name === "home" && <Home C={C} data={data} go={go} />}
+            {view.name === "category" && <CategoryView C={C} data={data} catId={view.catId} go={go} />}
+            {view.name === "topic" && <TopicView C={C} data={data} topicId={view.topicId} go={go} />}
+            {view.name === "quiz" && <QuizView C={C} data={data} topicId={view.topicId} go={go} />}
+          </>
+        )}
       </main>
     </div>
   );
+}
+
+function Home({ C, data, go }) {
+  return (
+    <div>
+      <section style={{ padding:"48px 0 40px" }}>
+        <p style={{ color:C.terra, fontSize:13, fontWeight:600, letterSpacing:2, textTransform:"uppercase", margin:0 }}>Belajar lewat peta pikiran & kuis</p>
+        <h1 style={{ ...serif, color:C.green, fontSize:44, fontWeight:600, lineHeight:1.1, maxWidth:640, margin:"12px 0 0" }}>Pahami konsep medis secara visual, lalu uji dengan kuis.</h1>
+        <p style={{ color:C.inkSoft, fontSize:18, maxWidth:520, marginTop:16 }}>Pilih kategori untuk mulai menjelajah materi.</p>
+      </section>
+      {data.categories.length === 0 && <Empty C={C} text="Belum ada konten. Tambahkan lewat /admin." />}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:16 }}>
+        {data.categories.map((cat) => {
+          const subCount = data.subcategories.filter((s) => s.categoryId === cat.id).length;
+          const topCount = data.topics.filter((t) => data.subcategories.some((s) => s.categoryId === cat.id && s.id === t.subcategoryId)).length;
+          return (
+            <button key={cat.id} onClick={() => go({ name:"category", catId:cat.id })} style={{ textAlign:"left", padding:24, borderRadius:18, border:`1px solid ${C.line}`, background:C.card, cursor:"pointer" }}>
+              <div style={{ fontSize:30 }}>{cat.emoji || "📘"}</div>
+              <h3 style={{ ...serif, color:C.ink, fontSize:24, fontWeight:600, margin:"12px 0 0" }}>{cat.name}</h3>
+              {cat.desc && <p style={{ color:C.inkSoft, fontSize:14, margin:"4px 0 0" }}>{cat.desc}</p>}
+              <p style={{ color:C.greenSoft, fontSize:12, fontWeight:600, marginTop:12 }}>{subCount} sub-bab · {topCount} topik</p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CategoryView({ C, data, catId, go }) {
+  const cat = data.categories.find((c) => c.id === catId);
+  if (!cat) return <Empty C={C} text="Kategori tidak ditemukan." />;
+  const subs = data.subcategories.filter((s) => s.categoryId === catId);
+  return (
+    <div style={{ padding:"32px 0" }}>
+      <Crumb C={C} go={go} items={[{ label:"Beranda", to:{ name:"home" } }, { label:cat.name }]} />
+      <div style={{ display:"flex", alignItems:"center", gap:12, margin:"16px 0 32px" }}>
+        <span style={{ fontSize:36 }}>{cat.emoji || "📘"}</span>
+        <h2 style={{ ...serif, color:C.green, fontSize:30, fontWeight:600, margin:0 }}>{cat.name}</h2>
+      </div>
+      {subs.map((sub) => {
+        const topics = data.topics.filter((t) => t.subcategoryId === sub.id);
+        return (
+          <div key={sub.id} style={{ marginBottom:32 }}>
+            <h3 style={{ color:C.terra, fontSize:13, fontWeight:600, letterSpacing:2, textTransform:"uppercase", marginBottom:12 }}>{sub.name}</h3>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))", gap:12 }}>
+              {topics.map((t) => (
+                <button key={t.id} onClick={() => go({ name:"topic", topicId:t.id })} style={{ textAlign:"left", padding:16, borderRadius:12, border:`1px solid ${C.line}`, background:C.card, cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontWeight:500 }}>{t.name}</span><span style={{ color:C.greenSoft }}>→</span>
+                </button>
+              ))}
+              {topics.length === 0 && <p style={{ color:C.inkSoft, fontSize:14 }}>Belum ada topik.</p>}
+            </div>
+          </div>
+        );
+      })}
+      {subs.length === 0 && <Empty C={C} text="Belum ada sub-bab." />}
+    </div>
+  );
+}
+
+function TopicView({ C, data, topicId, go }) {
+  const topic = data.topics.find((t) => t.id === topicId);
+  if (!topic) return <Empty C={C} text="Topik tidak ditemukan." />;
+  const sub = data.subcategories.find((s) => s.id === topic.subcategoryId);
+  const cat = sub && data.categories.find((c) => c.id === sub.categoryId);
+  const quiz = data.quizzes[topicId] || [];
+  return (
+    <div style={{ padding:"32px 0" }}>
+      <Crumb C={C} go={go} items={[{ label:"Beranda", to:{ name:"home" } }, cat && { label:cat.name, to:{ name:"category", catId:cat.id } }, { label:topic.name }].filter(Boolean)} />
+      <h2 style={{ ...serif, color:C.green, fontSize:36, fontWeight:600, margin:"16px 0" }}>{topic.name}</h2>
+      {topic.mindmapUrl ? (
+        <div style={{ borderRadius:18, border:`1px solid ${C.line}`, background:C.card, overflow:"hidden", marginBottom:24 }}>
+          <img src={topic.mindmapUrl} alt={`Mind map ${topic.name}`} style={{ width:"100%", display:"block" }} />
+        </div>
+      ) : (
+        <div style={{ borderRadius:18, border:`1px dashed ${C.line}`, background:C.paperDeep, color:C.inkSoft, padding:40, textAlign:"center", marginBottom:24 }}>🗺️ Belum ada mind map.</div>
+      )}
+      {topic.desc && (
+        <div style={{ borderRadius:18, border:`1px solid ${C.line}`, background:C.card, padding:20, marginBottom:24 }}>
+          <p style={{ color:C.ink, lineHeight:1.6, margin:0, whiteSpace:"pre-wrap" }}>{topic.desc}</p>
+        </div>
+      )}
+      {quiz.length > 0 ? (
+        <button onClick={() => go({ name:"quiz", topicId })} style={{ background:C.terra, color:"#fff", padding:"12px 24px", borderRadius:12, fontWeight:600, border:"none", cursor:"pointer", fontSize:16 }}>Mulai Kuis ({quiz.length} soal) →</button>
+      ) : (<p style={{ color:C.inkSoft, fontSize:14 }}>Belum ada kuis.</p>)}
+    </div>
+  );
+}
+
+function QuizView({ C, data, topicId, go }) {
+  const topic = data.topics.find((t) => t.id === topicId);
+  const quiz = data.quizzes[topicId] || [];
+  const [idx, setIdx] = useState(0);
+  const [picked, setPicked] = useState(null);
+  const [score, setScore] = useState(0);
+  const [done, setDone] = useState(false);
+  if (quiz.length === 0) return <Empty C={C} text="Kuis tidak tersedia." />;
+  const q = quiz[idx];
+  const choose = (i) => { if (picked !== null) return; setPicked(i); if (i === q.answer) setScore((s) => s + 1); };
+  const next = () => { setPicked(null); if (idx + 1 < quiz.length) setIdx(idx + 1); else setDone(true); };
+
+  if (done) {
+    const pct = Math.round((score / quiz.length) * 100);
+    return (
+      <div style={{ padding:"40px 0", maxWidth:480, margin:"0 auto", textAlign:"center" }}>
+        <div style={{ fontSize:48, marginBottom:16 }}>{pct >= 70 ? "🎉" : pct >= 40 ? "👍" : "📚"}</div>
+        <h2 style={{ ...serif, color:C.green, fontSize:30, fontWeight:600, margin:"0 0 8px" }}>Selesai!</h2>
+        <p style={{ color:C.inkSoft, marginBottom:24 }}>{topic?.name}</p>
+        <div style={{ borderRadius:18, border:`1px solid ${C.line}`, background:C.card, padding:32, marginBottom:24 }}>
+          <div style={{ color:C.terra, fontSize:48, fontWeight:700 }}>{score}/{quiz.length}</div>
+          <div style={{ color:C.inkSoft, marginTop:4 }}>benar ({pct}%)</div>
+        </div>
+        <div style={{ display:"flex", gap:12, justifyContent:"center" }}>
+          <button onClick={() => { setIdx(0); setPicked(null); setScore(0); setDone(false); }} style={{ background:C.green, color:"#fff", padding:"10px 20px", borderRadius:12, fontWeight:500, border:"none", cursor:"pointer" }}>Ulangi</button>
+          <button onClick={() => go({ name:"topic", topicId })} style={{ background:C.card, color:C.ink, padding:"10px 20px", borderRadius:12, border:`1px solid ${C.line}`, cursor:"pointer" }}>Kembali</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding:"32px 0", maxWidth:640, margin:"0 auto" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
+        <span style={{ color:C.greenSoft, fontSize:14, fontWeight:500 }}>Soal {idx + 1} dari {quiz.length}</span>
+        <button onClick={() => go({ name:"topic", topicId })} style={{ background:"none", border:"none", color:C.inkSoft, fontSize:14, cursor:"pointer" }}>Keluar</button>
+      </div>
+      <div style={{ background:C.paperDeep, height:6, borderRadius:999, marginBottom:32, overflow:"hidden" }}>
+        <div style={{ background:C.terra, width:`${(idx / quiz.length) * 100}%`, height:"100%", transition:"width .3s" }} />
+      </div>
+      <h2 style={{ ...serif, color:C.ink, fontSize:24, fontWeight:600, marginBottom:24, lineHeight:1.35 }}>{q.question}</h2>
+      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+        {q.options.map((opt, i) => {
+          let st = { background:C.card, border:`1px solid ${C.line}`, color:C.ink };
+          if (picked !== null) {
+            if (i === q.answer) st = { background:C.good + "22", border:`1px solid ${C.good}`, color:C.good };
+            else if (i === picked) st = { background:C.bad + "22", border:`1px solid ${C.bad}`, color:C.bad };
+          }
+          return (
+            <button key={i} onClick={() => choose(i)} disabled={picked !== null} style={{ ...st, textAlign:"left", padding:"12px 16px", borderRadius:12, fontWeight:500, cursor:picked === null ? "pointer" : "default", fontSize:16 }}>
+              <span style={{ opacity:0.5, marginRight:8 }}>{String.fromCharCode(65 + i)}.</span>{opt}
+            </button>
+          );
+        })}
+      </div>
+      {picked !== null && q.discussion && (
+        <div style={{ marginTop:20, borderRadius:12, border:`1px solid ${C.line}`, background:C.paperDeep, padding:16 }}>
+          <div style={{ color:C.terra, fontSize:12, fontWeight:700, letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>Pembahasan</div>
+          <p style={{ color:C.ink, lineHeight:1.6, margin:0 }}>{q.discussion}</p>
+        </div>
+      )}
+      {picked !== null && (
+        <button onClick={next} style={{ marginTop:24, width:"100%", padding:14, background:C.green, color:"#fff", borderRadius:12, fontWeight:600, border:"none", cursor:"pointer", fontSize:16 }}>
+          {idx + 1 < quiz.length ? "Soal berikutnya →" : "Lihat hasil"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Crumb({ C, items, go }) {
+  return (
+    <nav style={{ color:C.inkSoft, fontSize:14, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+      {items.map((it, i) => (
+        <span key={i} style={{ display:"flex", alignItems:"center", gap:8 }}>
+          {it.to ? <button onClick={() => go(it.to)} style={{ background:"none", border:"none", color:C.greenSoft, cursor:"pointer", fontSize:14, padding:0 }}>{it.label}</button>
+                 : <span style={{ color:C.ink, fontWeight:500 }}>{it.label}</span>}
+          {i < items.length - 1 && <span>›</span>}
+        </span>
+      ))}
+    </nav>
+  );
+}
+function Empty({ C, text }) {
+  return <div style={{ borderRadius:18, border:`1px dashed ${C.line}`, color:C.inkSoft, background:C.paperDeep, padding:32, textAlign:"center", fontSize:14, marginTop:32 }}>{text}</div>;
 }
