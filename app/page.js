@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-/* MedMind — halaman murid (versi poles tampilan & branding) */
+/* MedMind — halaman murid + akses voucher per kategori */
 
 const LIGHT = { paper:"#F6F1E7", paperDeep:"#ECE3D2", ink:"#1C2826", inkSoft:"#5A6B68", teal:"#0E3D3A", tealSoft:"#2C6B63", amber:"#D9952F", line:"#DCD3C2", card:"#FFFFFF", good:"#2C7A55", bad:"#B23A2E" };
 const DARK  = { paper:"#10201D", paperDeep:"#16302B", ink:"#EAF0EE", inkSoft:"#9DB3AE", teal:"#7FC9B8", tealSoft:"#9BD6C7", amber:"#E8B04B", line:"#26433D", card:"#16302B", good:"#7FCBA0", bad:"#E08A7E" };
@@ -24,10 +24,18 @@ function Logo({ size = 30 }) {
   );
 }
 
+// cek apakah kategori boleh diakses
+function canAccess(access, catId) {
+  if (access === "all") return true;
+  if (Array.isArray(access)) return access.includes(catId);
+  return false;
+}
+
 export default function Page() {
   const router = useRouter();
   const [dark, setDark] = useState(false);
   const [authed, setAuthed] = useState(false);
+  const [access, setAccess] = useState("all");
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({ categories: [], subcategories: [], topics: [], quizzes: {} });
   const [view, setView] = useState({ name: "home" });
@@ -36,6 +44,10 @@ export default function Page() {
   useEffect(() => {
     const v = localStorage.getItem("medmind_voucher");
     if (!v) { router.replace("/login"); return; }
+    try {
+      const a = localStorage.getItem("medmind_access");
+      setAccess(a ? JSON.parse(a) : "all"); // voucher lama tanpa data akses -> akses penuh
+    } catch { setAccess("all"); }
     setAuthed(true);
   }, [router]);
 
@@ -67,13 +79,13 @@ export default function Page() {
           topics: topsS.docs.map((d) => ({ id: d.id, ...d.data() })),
           quizzes,
         });
-      } catch (e) { console.error(e); alert("Gagal memuat konten. Cek koneksi & konfigurasi Firebase."); }
+      } catch (e) { console.error(e); alert("Gagal memuat konten."); }
       finally { setLoading(false); }
     })();
   }, [authed]);
 
   const go = (v) => { setView(v); window.scrollTo(0, 0); };
-  const logout = () => { localStorage.removeItem("medmind_voucher"); router.replace("/login"); };
+  const logout = () => { localStorage.removeItem("medmind_voucher"); localStorage.removeItem("medmind_access"); router.replace("/login"); };
   if (!authed) return null;
 
   return (
@@ -81,8 +93,7 @@ export default function Page() {
       <header style={{ position:"sticky", top:0, zIndex:20, borderBottom:`1px solid ${C.line}`, background:C.paper+"E6", backdropFilter:"blur(10px)" }}>
         <div style={{ maxWidth:980, margin:"0 auto", padding:"12px 20px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <button onClick={() => go({ name:"home" })} style={{ display:"flex", alignItems:"center", gap:10, background:"none", border:"none", cursor:"pointer" }}>
-            <Logo size={30} />
-            <span style={{ ...serif, color:C.teal, fontSize:20, fontWeight:700, letterSpacing:"-.01em" }}>MedMind</span>
+            <Logo size={30} /><span style={{ ...serif, color:C.teal, fontSize:20, fontWeight:700, letterSpacing:"-.01em" }}>MedMind</span>
           </button>
           <div style={{ display:"flex", gap:8 }}>
             <button onClick={() => setDark(!dark)} style={{ background:C.card, border:`1px solid ${C.line}`, color:C.ink, borderRadius:10, padding:"6px 12px", cursor:"pointer", fontSize:14 }}>{dark ? "☀️" : "🌙"}</button>
@@ -96,9 +107,9 @@ export default function Page() {
           <p style={{ color:C.inkSoft, padding:"60px 0", textAlign:"center" }} className="mm-fade">Memuat konten…</p>
         ) : (
           <div className="mm-page" key={view.name + (view.catId||"") + (view.topicId||"")}>
-            {view.name === "home" && <Home C={C} data={data} go={go} />}
-            {view.name === "category" && <CategoryView C={C} data={data} catId={view.catId} go={go} />}
-            {view.name === "topic" && <TopicView C={C} data={data} topicId={view.topicId} go={go} />}
+            {view.name === "home" && <Home C={C} data={data} access={access} go={go} />}
+            {view.name === "category" && <CategoryView C={C} data={data} access={access} catId={view.catId} go={go} />}
+            {view.name === "topic" && <TopicView C={C} data={data} access={access} topicId={view.topicId} go={go} />}
             {view.name === "quiz" && <QuizView C={C} data={data} topicId={view.topicId} go={go} />}
           </div>
         )}
@@ -107,7 +118,7 @@ export default function Page() {
   );
 }
 
-function Home({ C, data, go }) {
+function Home({ C, data, access, go }) {
   return (
     <div>
       <section style={{ padding:"52px 0 40px" }}>
@@ -118,15 +129,22 @@ function Home({ C, data, go }) {
       {data.categories.length === 0 && <Empty C={C} text="Belum ada konten. Tambahkan lewat /admin." />}
       <div className="mm-stagger" style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:16 }}>
         {data.categories.map((cat) => {
+          const allowed = canAccess(access, cat.id);
           const subCount = data.subcategories.filter((s) => s.categoryId === cat.id).length;
           const topCount = data.topics.filter((t) => data.subcategories.some((s) => s.categoryId === cat.id && s.id === t.subcategoryId)).length;
           return (
-            <button key={cat.id} onClick={() => go({ name:"category", catId:cat.id })} className="mm-lift"
-              style={{ textAlign:"left", padding:24, borderRadius:18, border:`1px solid ${C.line}`, background:C.card, cursor:"pointer" }}>
+            <button key={cat.id} onClick={() => allowed ? go({ name:"category", catId:cat.id }) : alert("Kategori ini terkunci. Voucher Anda tidak mencakup " + cat.name + ". Hubungi admin untuk membuka aksesnya.")}
+              className={allowed ? "mm-lift" : ""}
+              style={{ textAlign:"left", padding:24, borderRadius:18, border:`1px solid ${C.line}`, background:C.card, cursor:"pointer", position:"relative", opacity: allowed ? 1 : .62 }}>
+              {!allowed && (
+                <span style={{ position:"absolute", top:16, right:16, background:C.paperDeep, color:C.inkSoft, fontSize:12, fontWeight:600, padding:"4px 10px", borderRadius:999, display:"flex", alignItems:"center", gap:4 }}>🔒 Terkunci</span>
+              )}
               <div style={{ fontSize:30 }}>{cat.emoji || "📘"}</div>
               <h3 style={{ ...serif, color:C.ink, fontSize:24, fontWeight:600, margin:"12px 0 0" }}>{cat.name}</h3>
               {cat.desc && <p style={{ color:C.inkSoft, fontSize:14, margin:"4px 0 0" }}>{cat.desc}</p>}
-              <p style={{ color:C.tealSoft, fontSize:12, fontWeight:600, marginTop:12 }}>{subCount} sub-bab · {topCount} topik</p>
+              <p style={{ color: allowed ? C.tealSoft : C.inkSoft, fontSize:12, fontWeight:600, marginTop:12 }}>
+                {allowed ? `${subCount} sub-bab · ${topCount} topik` : "Butuh voucher untuk membuka"}
+              </p>
             </button>
           );
         })}
@@ -135,9 +153,10 @@ function Home({ C, data, go }) {
   );
 }
 
-function CategoryView({ C, data, catId, go }) {
+function CategoryView({ C, data, access, catId, go }) {
   const cat = data.categories.find((c) => c.id === catId);
   if (!cat) return <Empty C={C} text="Kategori tidak ditemukan." />;
+  if (!canAccess(access, catId)) return <Locked C={C} catName={cat.name} go={go} />;
   const subs = data.subcategories.filter((s) => s.categoryId === catId);
   return (
     <div style={{ padding:"32px 0" }}>
@@ -168,11 +187,13 @@ function CategoryView({ C, data, catId, go }) {
   );
 }
 
-function TopicView({ C, data, topicId, go }) {
+function TopicView({ C, data, access, topicId, go }) {
   const topic = data.topics.find((t) => t.id === topicId);
   if (!topic) return <Empty C={C} text="Topik tidak ditemukan." />;
   const sub = data.subcategories.find((s) => s.id === topic.subcategoryId);
   const cat = sub && data.categories.find((c) => c.id === sub.categoryId);
+  // jaga-jaga: kalau topik ini milik kategori terkunci, tolak
+  if (cat && !canAccess(access, cat.id)) return <Locked C={C} catName={cat.name} go={go} />;
   const quiz = data.quizzes[topicId] || [];
   return (
     <div style={{ padding:"32px 0" }}>
@@ -193,6 +214,19 @@ function TopicView({ C, data, topicId, go }) {
       {quiz.length > 0 ? (
         <button onClick={() => go({ name:"quiz", topicId })} style={{ background:C.amber, color:"#1C2826", padding:"13px 26px", borderRadius:13, fontWeight:700, border:"none", cursor:"pointer", fontSize:16 }}>Mulai Kuis ({quiz.length} soal) →</button>
       ) : (<p style={{ color:C.inkSoft, fontSize:14 }}>Belum ada kuis.</p>)}
+    </div>
+  );
+}
+
+function Locked({ C, catName, go }) {
+  return (
+    <div className="mm-pop" style={{ padding:"60px 0", maxWidth:460, margin:"0 auto", textAlign:"center" }}>
+      <div style={{ fontSize:48, marginBottom:12 }}>🔒</div>
+      <h2 style={{ ...serif, color:C.teal, fontSize:28, fontWeight:700, margin:"0 0 8px" }}>Kategori terkunci</h2>
+      <p style={{ color:C.inkSoft, fontSize:16, lineHeight:1.6, marginBottom:24 }}>
+        Voucher Anda belum mencakup <b>{catName}</b>. Hubungi admin untuk membuka akses kategori ini.
+      </p>
+      <button onClick={() => go({ name:"home" })} style={{ background:C.teal, color:"#fff", padding:"11px 22px", borderRadius:13, fontWeight:600, border:"none", cursor:"pointer" }}>← Kembali ke beranda</button>
     </div>
   );
 }

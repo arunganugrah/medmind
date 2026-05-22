@@ -6,11 +6,10 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { collection, getDocs, setDoc, deleteDoc, doc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
-const C = { paper:"#F6F1E7", paperDeep:"#EFE7D6", ink:"#26221C", inkSoft:"#5C564B", green:"#13463D", greenSoft:"#2C6357", terra:"#C8553D", line:"#D9CFBC", card:"#FFFFFF", good:"#2C7A55", bad:"#B23A2E" };
+const C = { paper:"#F6F1E7", paperDeep:"#ECE3D2", ink:"#1C2826", inkSoft:"#5A6B68", teal:"#0E3D3A", tealSoft:"#2C6B63", amber:"#D9952F", line:"#DCD3C2", card:"#FFFFFF", good:"#2C7A55", bad:"#B23A2E" };
 const serif = { fontFamily:"'Fraunces', Georgia, serif" };
 const sans  = { fontFamily:"'Hanken Grotesk', system-ui, sans-serif" };
 
-// Ubah gambar -> WebP base64 (teks), dikecilkan agar muat di 1 dokumen Firestore (~1 MB).
 function toWebpDataUrl(file, maxW = 1000) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -22,9 +21,8 @@ function toWebpDataUrl(file, maxW = 1000) {
         const canvas = document.createElement("canvas");
         canvas.width = w; canvas.height = h;
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        const LIMIT = 700 * 1024; // ~700KB teks, aman di bawah batas 1MB Firestore
-        let q = 0.8;
-        let url = canvas.toDataURL("image/webp", q);
+        const LIMIT = 700 * 1024;
+        let q = 0.8, url = canvas.toDataURL("image/webp", q);
         while (url.length > LIMIT && q > 0.3) { q -= 0.1; url = canvas.toDataURL("image/webp", q); }
         if (url.length > LIMIT) reject(new Error("Gambar terlalu besar walau sudah dikompres. Coba gambar lebih sederhana/kecil."));
         else resolve(url);
@@ -55,11 +53,8 @@ export default function AdminPage() {
 
   const reload = async () => {
     const [catsS, subsS, topsS, quizS, vouS] = await Promise.all([
-      getDocs(collection(db, "categories")),
-      getDocs(collection(db, "subcategories")),
-      getDocs(collection(db, "topics")),
-      getDocs(collection(db, "quizzes")),
-      getDocs(collection(db, "vouchers")),
+      getDocs(collection(db, "categories")), getDocs(collection(db, "subcategories")),
+      getDocs(collection(db, "topics")), getDocs(collection(db, "quizzes")), getDocs(collection(db, "vouchers")),
     ]);
     const quizzes = {};
     quizS.docs.forEach((d) => { quizzes[d.id] = d.data().items || []; });
@@ -67,8 +62,7 @@ export default function AdminPage() {
       categories: catsS.docs.map((d) => ({ id: d.id, ...d.data() })),
       subcategories: subsS.docs.map((d) => ({ id: d.id, ...d.data() })),
       topics: topsS.docs.map((d) => ({ id: d.id, ...d.data() })),
-      quizzes,
-      vouchers: vouS.docs.map((d) => ({ id: d.id, ...d.data() })),
+      quizzes, vouchers: vouS.docs.map((d) => ({ id: d.id, ...d.data() })),
     });
   };
   useEffect(() => { if (user) reload(); }, [user]);
@@ -80,9 +74,9 @@ export default function AdminPage() {
     <div style={{ ...sans, background:C.paper, color:C.ink, minHeight:"100vh" }}>
       <header style={{ borderBottom:`1px solid ${C.line}`, background:C.card }}>
         <div style={{ maxWidth:900, margin:"0 auto", padding:"14px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <span style={{ ...serif, color:C.green, fontSize:20, fontWeight:700 }}>🧠 MedMind · Admin</span>
+          <span style={{ ...serif, color:C.teal, fontSize:20, fontWeight:700 }}>🧠 MedMind · Admin</span>
           <div style={{ display:"flex", gap:8 }}>
-            <a href="/" style={{ fontSize:14, color:C.greenSoft, textDecoration:"none", padding:"6px 10px" }}>Lihat situs</a>
+            <a href="/" style={{ fontSize:14, color:C.tealSoft, textDecoration:"none", padding:"6px 10px" }}>Lihat situs</a>
             <button onClick={() => signOut(auth)} style={{ fontSize:14, background:"none", border:`1px solid ${C.line}`, color:C.inkSoft, borderRadius:10, padding:"6px 12px", cursor:"pointer" }}>Keluar</button>
           </div>
         </div>
@@ -91,7 +85,7 @@ export default function AdminPage() {
         <div style={{ display:"flex", gap:8, marginBottom:24, flexWrap:"wrap" }}>
           {[["konten","Kategori & Topik"],["kuis","Kuis"],["voucher","Voucher"]].map(([k,label]) => (
             <button key={k} onClick={() => setTab(k)}
-              style={ tab === k ? { background:C.green, color:"#fff", border:`1px solid ${C.green}`, borderRadius:10, padding:"8px 16px", cursor:"pointer", fontWeight:500, fontSize:14 }
+              style={ tab === k ? { background:C.teal, color:"#fff", border:`1px solid ${C.teal}`, borderRadius:10, padding:"8px 16px", cursor:"pointer", fontWeight:500, fontSize:14 }
                                 : { background:C.card, color:C.ink, border:`1px solid ${C.line}`, borderRadius:10, padding:"8px 16px", cursor:"pointer", fontWeight:500, fontSize:14 } }>
               {label}
             </button>
@@ -107,12 +101,12 @@ export default function AdminPage() {
 
 function Box({ title, children }) {
   return <div style={{ background:C.card, border:`1px solid ${C.line}`, borderRadius:18, padding:20, marginBottom:20 }}>
-    <h3 style={{ color:C.green, fontWeight:600, margin:"0 0 16px" }}>{title}</h3>{children}</div>;
+    <h3 style={{ color:C.teal, fontWeight:600, margin:"0 0 16px" }}>{title}</h3>{children}</div>;
 }
 function Inp(props) { return <input {...props} style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:`1px solid ${C.line}`, fontSize:15, outline:"none", marginBottom:10, boxSizing:"border-box" }} />; }
 function Sel(props) { return <select {...props} style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:`1px solid ${C.line}`, fontSize:15, marginBottom:10, boxSizing:"border-box", background:"#fff" }} />; }
-function Btn({ children, onClick, danger, disabled }) {
-  return <button onClick={onClick} disabled={disabled} style={{ background: danger ? C.bad : C.green, color:"#fff", border:"none", borderRadius:10, padding:"9px 16px", cursor:"pointer", fontWeight:500, fontSize:14, opacity: disabled ? 0.6 : 1 }}>{children}</button>;
+function Btn({ children, onClick, disabled }) {
+  return <button onClick={onClick} disabled={disabled} style={{ background:C.teal, color:"#fff", border:"none", borderRadius:10, padding:"9px 16px", cursor:"pointer", fontWeight:500, fontSize:14, opacity: disabled ? 0.6 : 1 }}>{children}</button>;
 }
 const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
@@ -224,8 +218,7 @@ function Kuis({ data, reload }) {
     if (!opts[ans] || !opts[ans].trim()) return alert("Opsi jawaban benar masih kosong.");
     const cleanOpts = opts.map((o) => o.trim()).filter((o) => o);
     const item = { question: q.trim(), options: cleanOpts, answer: Math.min(ans, cleanOpts.length - 1), discussion: disc.trim() };
-    await save([...quiz, item]);
-    setQ(""); setOpts(["","","",""]); setAns(0); setDisc("");
+    await save([...quiz, item]); setQ(""); setOpts(["","","",""]); setAns(0); setDisc("");
   };
   const delQ = async (i) => { await save(quiz.filter((_, idx) => idx !== i)); };
 
@@ -278,22 +271,72 @@ function Kuis({ data, reload }) {
 
 function Voucher({ data, reload }) {
   const [code, setCode] = useState("");
-  const add = async () => { const c = code.trim().toUpperCase(); if (!c) return alert("Isi kode voucher."); await setDoc(doc(db, "vouchers", c), { active: true }); setCode(""); reload(); };
-  const toggle = async (v) => { await setDoc(doc(db, "vouchers", v.id), { active: !v.active }); reload(); };
+  const [allAccess, setAllAccess] = useState(false);
+  const [picked, setPicked] = useState([]); // id kategori terpilih
+
+  const toggleCat = (id) => setPicked((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
+
+  const add = async () => {
+    const c = code.trim().toUpperCase();
+    if (!c) return alert("Isi kode voucher.");
+    if (!allAccess && picked.length === 0) return alert("Pilih minimal 1 kategori, atau centang 'Semua kategori'.");
+    const categories = allAccess ? "all" : picked;
+    await setDoc(doc(db, "vouchers", c), { active: true, categories });
+    setCode(""); setAllAccess(false); setPicked([]); reload();
+  };
+  const toggleActive = async (v) => { await setDoc(doc(db, "vouchers", v.id), { active: !v.active, categories: v.categories ?? "all" }); reload(); };
   const del = async (id) => { if (!confirm("Hapus voucher?")) return; await deleteDoc(doc(db, "vouchers", id)); reload(); };
+
+  const catName = (id) => data.categories.find((c) => c.id === id)?.name || id;
+  const describe = (v) => {
+    if (v.categories === undefined || v.categories === "all") return "Semua kategori";
+    if (Array.isArray(v.categories)) return v.categories.map(catName).join(", ") || "(kosong)";
+    return String(v.categories);
+  };
+
   return (
     <div>
       <Box title="Tambah Voucher">
         <Inp placeholder="MMQ-MATA-001" value={code} onChange={(e) => setCode(e.target.value)} />
+
+        <label style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12, fontSize:14, fontWeight:600, color:C.teal }}>
+          <input type="checkbox" checked={allAccess} onChange={(e) => setAllAccess(e.target.checked)} />
+          Akses SEMUA kategori
+        </label>
+
+        {!allAccess && (
+          <div style={{ marginBottom:12 }}>
+            <p style={{ fontSize:13, color:C.inkSoft, margin:"0 0 8px" }}>Atau pilih kategori yang dibuka voucher ini:</p>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+              {data.categories.map((c) => {
+                const on = picked.includes(c.id);
+                return (
+                  <button key={c.id} onClick={() => toggleCat(c.id)}
+                    style={{ border:`1.5px solid ${on ? C.teal : C.line}`, background: on ? C.teal : C.card, color: on ? "#fff" : C.ink,
+                      borderRadius:999, padding:"7px 14px", cursor:"pointer", fontSize:14, fontWeight:500 }}>
+                    {on ? "✓ " : ""}{c.emoji} {c.name}
+                  </button>
+                );
+              })}
+              {data.categories.length === 0 && <span style={{ fontSize:13, color:C.inkSoft }}>Belum ada kategori. Tambah kategori dulu.</span>}
+            </div>
+          </div>
+        )}
+
         <Btn onClick={add}>+ Tambah Voucher</Btn>
       </Box>
+
       <Box title={`Daftar Voucher (${data.vouchers.length})`}>
         {data.vouchers.length === 0 && <p style={{ color:C.inkSoft, fontSize:14 }}>Belum ada voucher.</p>}
         {data.vouchers.map((v) => (
-          <div key={v.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", border:`1px solid ${C.line}`, borderRadius:10, padding:"10px 12px", marginBottom:8 }}>
-            <span style={{ fontSize:14, fontFamily:"monospace" }}>{v.id} <span style={{ color: v.active ? C.good : C.bad, fontSize:12, fontWeight:600 }}>{v.active ? "AKTIF" : "NONAKTIF"}</span></span>
-            <span style={{ display:"flex", gap:12 }}>
-              <button onClick={() => toggle(v)} style={{ background:"none", border:"none", color:C.greenSoft, cursor:"pointer", fontSize:14 }}>{v.active ? "Nonaktifkan" : "Aktifkan"}</button>
+          <div key={v.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", border:`1px solid ${C.line}`, borderRadius:10, padding:"10px 12px", marginBottom:8, gap:12 }}>
+            <span style={{ fontSize:14 }}>
+              <b style={{ fontFamily:"monospace" }}>{v.id}</b>
+              <span style={{ color: v.active ? C.good : C.bad, fontSize:12, fontWeight:600, marginLeft:8 }}>{v.active ? "AKTIF" : "NONAKTIF"}</span>
+              <span style={{ display:"block", color:C.inkSoft, fontSize:12.5, marginTop:2 }}>🔑 {describe(v)}</span>
+            </span>
+            <span style={{ display:"flex", gap:12, flexShrink:0 }}>
+              <button onClick={() => toggleActive(v)} style={{ background:"none", border:"none", color:C.tealSoft, cursor:"pointer", fontSize:14 }}>{v.active ? "Nonaktifkan" : "Aktifkan"}</button>
               <button onClick={() => del(v.id)} style={{ background:"none", border:"none", color:C.bad, cursor:"pointer", fontSize:14 }}>Hapus</button>
             </span>
           </div>
