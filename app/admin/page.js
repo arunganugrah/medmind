@@ -24,7 +24,7 @@ function toWebpDataUrl(file, maxW = 1000) {
         const LIMIT = 700 * 1024;
         let q = 0.8, url = canvas.toDataURL("image/webp", q);
         while (url.length > LIMIT && q > 0.3) { q -= 0.1; url = canvas.toDataURL("image/webp", q); }
-        if (url.length > LIMIT) reject(new Error("Gambar terlalu besar walau sudah dikompres. Coba gambar lebih sederhana/kecil."));
+        if (url.length > LIMIT) reject(new Error("Gambar terlalu besar walau sudah dikompres."));
         else resolve(url);
       };
       img.onerror = reject; img.src = e.target.result;
@@ -32,6 +32,7 @@ function toWebpDataUrl(file, maxW = 1000) {
     reader.onerror = reject; reader.readAsDataURL(file);
   });
 }
+const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 export default function AdminPage() {
   const router = useRouter();
@@ -99,93 +100,146 @@ export default function AdminPage() {
   );
 }
 
-function Box({ title, children }) {
+function Box({ title, children, sub }) {
   return <div style={{ background:C.card, border:`1px solid ${C.line}`, borderRadius:18, padding:20, marginBottom:20 }}>
-    <h3 style={{ color:C.teal, fontWeight:600, margin:"0 0 16px" }}>{title}</h3>{children}</div>;
+    <h3 style={{ color:C.teal, fontWeight:600, margin:"0 0 4px" }}>{title}</h3>
+    {sub && <p style={{ color:C.inkSoft, fontSize:13, margin:"0 0 14px" }}>{sub}</p>}
+    {!sub && <div style={{ height:12 }} />}
+    {children}</div>;
 }
 function Inp(props) { return <input {...props} style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:`1px solid ${C.line}`, fontSize:15, outline:"none", marginBottom:10, boxSizing:"border-box" }} />; }
+function Area(props) { return <textarea {...props} style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:`1px solid ${C.line}`, fontSize:15, outline:"none", marginBottom:10, boxSizing:"border-box", fontFamily:"inherit" }} />; }
 function Sel(props) { return <select {...props} style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:`1px solid ${C.line}`, fontSize:15, marginBottom:10, boxSizing:"border-box", background:"#fff" }} />; }
-function Btn({ children, onClick, disabled }) {
-  return <button onClick={onClick} disabled={disabled} style={{ background:C.teal, color:"#fff", border:"none", borderRadius:10, padding:"9px 16px", cursor:"pointer", fontWeight:500, fontSize:14, opacity: disabled ? 0.6 : 1 }}>{children}</button>;
+function Btn({ children, onClick, disabled, kind }) {
+  const bg = kind === "ghost" ? C.card : kind === "amber" ? C.amber : C.teal;
+  const col = kind === "ghost" ? C.ink : kind === "amber" ? "#1C2826" : "#fff";
+  return <button onClick={onClick} disabled={disabled} style={{ background:bg, color:col, border: kind === "ghost" ? `1px solid ${C.line}` : "none", borderRadius:10, padding:"9px 16px", cursor:"pointer", fontWeight:600, fontSize:14, opacity: disabled ? 0.6 : 1 }}>{children}</button>;
 }
-const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
+/* ============================ KONTEN (dengan EDIT) ============================ */
 function Konten({ data, reload }) {
+  // kategori
   const [catName, setCatName] = useState(""); const [catEmoji, setCatEmoji] = useState(""); const [catDesc, setCatDesc] = useState("");
+  const [editCat, setEditCat] = useState(null); // id sedang diedit
+  // sub
   const [subName, setSubName] = useState(""); const [subCat, setSubCat] = useState("");
+  const [editSub, setEditSub] = useState(null);
+  // topik
   const [tName, setTName] = useState(""); const [tSub, setTSub] = useState(""); const [tDesc, setTDesc] = useState("");
   const [imgUrl, setImgUrl] = useState(""); const [busy, setBusy] = useState(false);
+  const [editTopic, setEditTopic] = useState(null);
   const fileRef = useRef();
 
-  const addCat = async () => {
+  // KATEGORI
+  const saveCat = async () => {
     if (!catName.trim()) return alert("Isi nama kategori.");
-    await setDoc(doc(db, "categories", slug(catName)), { name: catName.trim(), emoji: catEmoji.trim(), desc: catDesc.trim() });
-    setCatName(""); setCatEmoji(""); setCatDesc(""); reload();
+    const id = editCat || slug(catName);
+    await setDoc(doc(db, "categories", id), { name: catName.trim(), emoji: catEmoji.trim(), desc: catDesc.trim() });
+    setCatName(""); setCatEmoji(""); setCatDesc(""); setEditCat(null); reload();
   };
+  const startEditCat = (c) => { setEditCat(c.id); setCatName(c.name); setCatEmoji(c.emoji || ""); setCatDesc(c.desc || ""); window.scrollTo(0,0); };
   const delCat = async (id) => { if (!confirm("Hapus kategori ini?")) return; await deleteDoc(doc(db, "categories", id)); reload(); };
-  const addSub = async () => {
+
+  // SUB
+  const saveSub = async () => {
     if (!subCat) return alert("Pilih kategori.");
     if (!subName.trim()) return alert("Isi nama sub-bab.");
-    await setDoc(doc(db, "subcategories", slug(subName) + "-" + subCat), { name: subName.trim(), categoryId: subCat });
-    setSubName(""); reload();
+    const id = editSub || (slug(subName) + "-" + subCat);
+    await setDoc(doc(db, "subcategories", id), { name: subName.trim(), categoryId: subCat });
+    setSubName(""); setEditSub(null); reload();
   };
+  const startEditSub = (s) => { setEditSub(s.id); setSubName(s.name); setSubCat(s.categoryId); window.scrollTo(0,0); };
+  const delSub = async (id) => { if (!confirm("Hapus sub-bab ini?")) return; await deleteDoc(doc(db, "subcategories", id)); reload(); };
+
+  // TOPIK
   const onFile = async (e) => {
-    const f = e.target.files[0];
-    if (!f) { setImgUrl(""); return; }
+    const f = e.target.files[0]; if (!f) { setImgUrl(""); return; }
     setBusy(true);
     try { setImgUrl(await toWebpDataUrl(f)); }
-    catch (err) { console.error(err); alert(err.message || "Gagal memproses gambar."); setImgUrl(""); if (fileRef.current) fileRef.current.value = ""; }
+    catch (err) { alert(err.message || "Gagal memproses gambar."); setImgUrl(""); if (fileRef.current) fileRef.current.value=""; }
     finally { setBusy(false); }
   };
-  const addTopic = async () => {
+  const saveTopic = async () => {
     if (!tSub) return alert("Pilih sub-bab.");
     if (!tName.trim()) return alert("Isi nama topik.");
     setBusy(true);
     try {
-      await setDoc(doc(db, "topics", slug(tName) + "-" + tSub), { name: tName.trim(), subcategoryId: tSub, desc: tDesc.trim(), mindmapUrl: imgUrl });
-      setTName(""); setTDesc(""); setImgUrl(""); if (fileRef.current) fileRef.current.value = ""; reload();
-    } catch (e) { console.error(e); alert("Gagal menambah topik."); }
+      const id = editTopic ? editTopic.id : (slug(tName) + "-" + tSub);
+      // saat edit & tidak ganti gambar, pertahankan gambar lama
+      const mindmapUrl = imgUrl || (editTopic ? editTopic.mindmapUrl || "" : "");
+      await setDoc(doc(db, "topics", id), { name: tName.trim(), subcategoryId: tSub, desc: tDesc.trim(), mindmapUrl });
+      setTName(""); setTDesc(""); setImgUrl(""); setEditTopic(null); if (fileRef.current) fileRef.current.value=""; reload();
+    } catch (e) { alert("Gagal menyimpan topik."); }
     finally { setBusy(false); }
   };
+  const startEditTopic = (t) => { setEditTopic(t); setTName(t.name); setTSub(t.subcategoryId); setTDesc(t.desc || ""); setImgUrl(""); window.scrollTo(0,0); };
   const delTopic = async (id) => { if (!confirm("Hapus topik ini?")) return; await deleteDoc(doc(db, "topics", id)); reload(); };
 
   return (
     <div>
-      <Box title="Tambah Kategori">
+      <Box title={editCat ? "Edit Kategori" : "Tambah Kategori"}>
         <Inp placeholder="Nama (mis. Mata)" value={catName} onChange={(e) => setCatName(e.target.value)} />
         <Inp placeholder="Emoji (mis. 👁️)" value={catEmoji} onChange={(e) => setCatEmoji(e.target.value)} />
         <Inp placeholder="Deskripsi singkat" value={catDesc} onChange={(e) => setCatDesc(e.target.value)} />
-        <Btn onClick={addCat}>+ Tambah Kategori</Btn>
-        <div style={{ marginTop:14, display:"flex", flexWrap:"wrap", gap:8 }}>
+        <div style={{ display:"flex", gap:8 }}>
+          <Btn onClick={saveCat}>{editCat ? "Simpan Perubahan" : "+ Tambah Kategori"}</Btn>
+          {editCat && <Btn kind="ghost" onClick={() => { setEditCat(null); setCatName(""); setCatEmoji(""); setCatDesc(""); }}>Batal</Btn>}
+        </div>
+        <div style={{ marginTop:14, display:"flex", flexDirection:"column", gap:8 }}>
           {data.categories.map((c) => (
-            <span key={c.id} style={{ background:C.paperDeep, padding:"6px 12px", borderRadius:999, fontSize:14, display:"flex", gap:8, alignItems:"center" }}>
-              {c.emoji} {c.name}<button onClick={() => delCat(c.id)} style={{ background:"none", border:"none", color:C.bad, cursor:"pointer", fontWeight:700 }}>×</button>
-            </span>
+            <div key={c.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", border:`1px solid ${C.line}`, borderRadius:10, padding:"8px 12px" }}>
+              <span style={{ fontSize:14 }}>{c.emoji} <b>{c.name}</b></span>
+              <span style={{ display:"flex", gap:12 }}>
+                <button onClick={() => startEditCat(c)} style={{ background:"none", border:"none", color:C.tealSoft, cursor:"pointer", fontSize:14 }}>Edit</button>
+                <button onClick={() => delCat(c.id)} style={{ background:"none", border:"none", color:C.bad, cursor:"pointer", fontSize:14 }}>Hapus</button>
+              </span>
+            </div>
           ))}
         </div>
       </Box>
 
-      <Box title="Tambah Sub-bab">
+      <Box title={editSub ? "Edit Sub-bab" : "Tambah Sub-bab"}>
         <Sel value={subCat} onChange={(e) => setSubCat(e.target.value)}>
           <option value="">— pilih kategori —</option>
-          {data.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {data.categories.map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
         </Sel>
         <Inp placeholder="Nama sub-bab (mis. Kelainan Refraksi)" value={subName} onChange={(e) => setSubName(e.target.value)} />
-        <Btn onClick={addSub}>+ Tambah Sub-bab</Btn>
+        <div style={{ display:"flex", gap:8 }}>
+          <Btn onClick={saveSub}>{editSub ? "Simpan Perubahan" : "+ Tambah Sub-bab"}</Btn>
+          {editSub && <Btn kind="ghost" onClick={() => { setEditSub(null); setSubName(""); setSubCat(""); }}>Batal</Btn>}
+        </div>
+        <div style={{ marginTop:14, display:"flex", flexDirection:"column", gap:8 }}>
+          {data.subcategories.map((s) => {
+            const c = data.categories.find((x) => x.id === s.categoryId);
+            return (
+              <div key={s.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", border:`1px solid ${C.line}`, borderRadius:10, padding:"8px 12px" }}>
+                <span style={{ fontSize:14 }}><b>{s.name}</b> <span style={{ color:C.inkSoft }}>· {c?.name}</span></span>
+                <span style={{ display:"flex", gap:12 }}>
+                  <button onClick={() => startEditSub(s)} style={{ background:"none", border:"none", color:C.tealSoft, cursor:"pointer", fontSize:14 }}>Edit</button>
+                  <button onClick={() => delSub(s.id)} style={{ background:"none", border:"none", color:C.bad, cursor:"pointer", fontSize:14 }}>Hapus</button>
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </Box>
 
-      <Box title="Tambah Topik + Mind Map">
+      <Box title={editTopic ? "Edit Topik" : "Tambah Topik + Mind Map"}>
         <Sel value={tSub} onChange={(e) => setTSub(e.target.value)}>
           <option value="">— pilih sub-bab —</option>
           {data.subcategories.map((s) => { const c = data.categories.find((x) => x.id === s.categoryId); return <option key={s.id} value={s.id}>{c?.name} › {s.name}</option>; })}
         </Sel>
         <Inp placeholder="Nama topik (mis. Miopia)" value={tName} onChange={(e) => setTName(e.target.value)} />
-        <textarea placeholder="Penjelasan singkat" value={tDesc} onChange={(e) => setTDesc(e.target.value)} rows={3}
-          style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:`1px solid ${C.line}`, fontSize:15, outline:"none", marginBottom:10, boxSizing:"border-box", fontFamily:"inherit" }} />
-        <p style={{ fontSize:13, color:C.inkSoft, margin:"4px 0" }}>Mind map (otomatis dikecilkan ke WebP, disimpan di Firestore):</p>
+        <Area placeholder="Penjelasan singkat" value={tDesc} onChange={(e) => setTDesc(e.target.value)} rows={3} />
+        <p style={{ fontSize:13, color:C.inkSoft, margin:"4px 0" }}>
+          Mind map (otomatis dikecilkan){editTopic ? " — kosongkan jika tidak ingin mengubah gambar lama" : ""}:
+        </p>
         <input ref={fileRef} type="file" accept="image/*" onChange={onFile} style={{ marginBottom:12, fontSize:14 }} />
         {imgUrl && <img src={imgUrl} alt="pratinjau" style={{ maxHeight:160, borderRadius:10, border:`1px solid ${C.line}`, display:"block", marginBottom:12 }} />}
-        <div><Btn onClick={addTopic} disabled={busy}>{busy ? "Memproses…" : "+ Tambah Topik"}</Btn></div>
+        <div style={{ display:"flex", gap:8 }}>
+          <Btn onClick={saveTopic} disabled={busy}>{busy ? "Memproses…" : editTopic ? "Simpan Perubahan" : "+ Tambah Topik"}</Btn>
+          {editTopic && <Btn kind="ghost" onClick={() => { setEditTopic(null); setTName(""); setTSub(""); setTDesc(""); setImgUrl(""); if (fileRef.current) fileRef.current.value=""; }}>Batal</Btn>}
+        </div>
       </Box>
 
       <Box title="Daftar Topik">
@@ -197,7 +251,10 @@ function Konten({ data, reload }) {
           return (
             <div key={t.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", border:`1px solid ${C.line}`, borderRadius:10, padding:"10px 12px", marginBottom:8 }}>
               <span style={{ fontSize:14 }}><b>{t.name}</b> <span style={{ color:C.inkSoft }}>· {c?.name} › {s?.name} · {qn} soal</span></span>
-              <button onClick={() => delTopic(t.id)} style={{ background:"none", border:"none", color:C.bad, cursor:"pointer", fontSize:14 }}>Hapus</button>
+              <span style={{ display:"flex", gap:12, flexShrink:0 }}>
+                <button onClick={() => startEditTopic(t)} style={{ background:"none", border:"none", color:C.tealSoft, cursor:"pointer", fontSize:14 }}>Edit</button>
+                <button onClick={() => delTopic(t.id)} style={{ background:"none", border:"none", color:C.bad, cursor:"pointer", fontSize:14 }}>Hapus</button>
+              </span>
             </div>
           );
         })}
@@ -206,54 +263,151 @@ function Konten({ data, reload }) {
   );
 }
 
+/* ============================ KUIS (single + MASSAL + edit) ============================ */
 function Kuis({ data, reload }) {
   const [topicId, setTopicId] = useState("");
+  const [mode, setMode] = useState("satu"); // "satu" | "massal"
+  // single
   const [q, setQ] = useState(""); const [opts, setOpts] = useState(["","","",""]);
   const [ans, setAns] = useState(0); const [disc, setDisc] = useState("");
+  const [editIdx, setEditIdx] = useState(null);
+  // massal
+  const [bulk, setBulk] = useState("");
+
   const quiz = topicId ? (data.quizzes[topicId] || []) : [];
   const save = async (items) => { await setDoc(doc(db, "quizzes", topicId), { items }); reload(); };
-  const addQ = async () => {
+
+  const resetSingle = () => { setQ(""); setOpts(["","","",""]); setAns(0); setDisc(""); setEditIdx(null); };
+  const saveSingle = async () => {
     if (!topicId) return alert("Pilih topik dulu.");
     if (!q.trim() || !opts[0].trim() || !opts[1].trim()) return alert("Lengkapi pertanyaan & minimal 2 opsi.");
     if (!opts[ans] || !opts[ans].trim()) return alert("Opsi jawaban benar masih kosong.");
     const cleanOpts = opts.map((o) => o.trim()).filter((o) => o);
     const item = { question: q.trim(), options: cleanOpts, answer: Math.min(ans, cleanOpts.length - 1), discussion: disc.trim() };
-    await save([...quiz, item]); setQ(""); setOpts(["","","",""]); setAns(0); setDisc("");
+    if (editIdx !== null) { const next = [...quiz]; next[editIdx] = item; await save(next); }
+    else await save([...quiz, item]);
+    resetSingle();
   };
-  const delQ = async (i) => { await save(quiz.filter((_, idx) => idx !== i)); };
+  const startEdit = (i) => {
+    const it = quiz[i]; setEditIdx(i); setQ(it.question);
+    const o = [...it.options]; while (o.length < 4) o.push(""); setOpts(o.slice(0,4));
+    setAns(it.answer); setDisc(it.discussion || ""); setMode("satu"); window.scrollTo(0,0);
+  };
+  const delQ = async (i) => { if (!confirm("Hapus soal ini?")) return; await save(quiz.filter((_, idx) => idx !== i)); };
+
+  // Parser massal:
+  // Format per soal, dipisah baris kosong:
+  //   Pertanyaan?
+  //   *Opsi benar (tanda * di depan = jawaban benar)
+  //   Opsi lain
+  //   Opsi lain
+  //   # Pembahasan (baris diawali # = pembahasan, opsional)
+  const parseBulk = (text) => {
+    const blocks = text.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+    const items = []; const errors = [];
+    blocks.forEach((b, bi) => {
+      const lines = b.split("\n").map((l) => l.trim()).filter(Boolean);
+      if (lines.length < 3) { errors.push(`Soal #${bi+1}: minimal butuh pertanyaan + 2 opsi.`); return; }
+      const question = lines[0];
+      let discussion = "";
+      const optLines = [];
+      for (let i = 1; i < lines.length; i++) {
+        if (lines[i].startsWith("#")) discussion = lines[i].replace(/^#\s?/, "").trim();
+        else optLines.push(lines[i]);
+      }
+      let answer = optLines.findIndex((o) => o.startsWith("*"));
+      if (answer === -1) answer = 0; // kalau lupa tandai, anggap opsi pertama
+      const options = optLines.map((o) => o.replace(/^\*\s?/, "").trim()).filter(Boolean);
+      if (options.length < 2) { errors.push(`Soal #${bi+1}: minimal 2 opsi.`); return; }
+      items.push({ question, options, answer: Math.min(answer, options.length-1), discussion });
+    });
+    return { items, errors };
+  };
+  const importBulk = async () => {
+    if (!topicId) return alert("Pilih topik dulu.");
+    if (!bulk.trim()) return alert("Tempel soal di kotak dulu.");
+    const { items, errors } = parseBulk(bulk);
+    if (items.length === 0) return alert("Tidak ada soal valid terbaca.\n" + errors.join("\n"));
+    let msg = `Akan menambah ${items.length} soal ke topik ini.`;
+    if (errors.length) msg += `\n\nDilewati ${errors.length} blok bermasalah:\n` + errors.join("\n");
+    if (!confirm(msg + "\n\nLanjut?")) return;
+    await save([...quiz, ...items]);
+    setBulk("");
+  };
 
   return (
     <div>
       <Box title="Pilih Topik">
-        <Sel value={topicId} onChange={(e) => setTopicId(e.target.value)}>
+        <Sel value={topicId} onChange={(e) => { setTopicId(e.target.value); resetSingle(); }}>
           <option value="">— pilih topik —</option>
-          {data.topics.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          {data.topics.map((t) => { const s = data.subcategories.find((x)=>x.id===t.subcategoryId); const c = s && data.categories.find((x)=>x.id===s.categoryId); return <option key={t.id} value={t.id}>{c?.name} › {t.name}</option>; })}
         </Sel>
       </Box>
+
       {topicId && (
         <>
-          <Box title="Tambah Soal">
-            <Inp placeholder="Pertanyaan" value={q} onChange={(e) => setQ(e.target.value)} />
-            {opts.map((o, i) => (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                <input type="radio" name="ans" checked={ans === i} onChange={() => setAns(i)} title="Tandai jawaban benar" />
-                <input value={o} onChange={(e) => { const n = [...opts]; n[i] = e.target.value; setOpts(n); }}
-                  placeholder={`Opsi ${String.fromCharCode(65 + i)}${i < 2 ? " (wajib)" : " (opsional)"}`}
-                  style={{ flex:1, padding:"10px 12px", borderRadius:10, border:`1px solid ${C.line}`, fontSize:15, outline:"none", boxSizing:"border-box" }} />
+          <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+            <button onClick={() => setMode("satu")} style={{ flex:1, padding:"8px", borderRadius:10, border:`1px solid ${mode==="satu"?C.teal:C.line}`, background: mode==="satu"?C.teal:C.card, color: mode==="satu"?"#fff":C.ink, cursor:"pointer", fontWeight:600, fontSize:14 }}>Satu per satu</button>
+            <button onClick={() => setMode("massal")} style={{ flex:1, padding:"8px", borderRadius:10, border:`1px solid ${mode==="massal"?C.teal:C.line}`, background: mode==="massal"?C.teal:C.card, color: mode==="massal"?"#fff":C.ink, cursor:"pointer", fontWeight:600, fontSize:14 }}>Input massal ⚡</button>
+          </div>
+
+          {mode === "satu" && (
+            <Box title={editIdx !== null ? `Edit Soal #${editIdx+1}` : "Tambah Soal"}>
+              <Inp placeholder="Pertanyaan" value={q} onChange={(e) => setQ(e.target.value)} />
+              {opts.map((o, i) => (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                  <input type="radio" name="ans" checked={ans === i} onChange={() => setAns(i)} title="Tandai jawaban benar" />
+                  <input value={o} onChange={(e) => { const n=[...opts]; n[i]=e.target.value; setOpts(n); }}
+                    placeholder={`Opsi ${String.fromCharCode(65+i)}${i<2?" (wajib)":" (opsional)"}`}
+                    style={{ flex:1, padding:"10px 12px", borderRadius:10, border:`1px solid ${C.line}`, fontSize:15, outline:"none", boxSizing:"border-box" }} />
+                </div>
+              ))}
+              <p style={{ fontSize:12, color:C.inkSoft, margin:"4px 0 10px" }}>Klik lingkaran di kiri untuk menandai jawaban benar.</p>
+              <Area placeholder="Pembahasan (muncul setelah murid menjawab)" value={disc} onChange={(e) => setDisc(e.target.value)} rows={3} />
+              <div style={{ display:"flex", gap:8 }}>
+                <Btn onClick={saveSingle}>{editIdx !== null ? "Simpan Perubahan" : "+ Tambah Soal"}</Btn>
+                {editIdx !== null && <Btn kind="ghost" onClick={resetSingle}>Batal</Btn>}
               </div>
-            ))}
-            <p style={{ fontSize:12, color:C.inkSoft, margin:"4px 0 10px" }}>Klik lingkaran di kiri untuk menandai jawaban benar.</p>
-            <textarea placeholder="Pembahasan (muncul setelah murid menjawab)" value={disc} onChange={(e) => setDisc(e.target.value)} rows={3}
-              style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:`1px solid ${C.line}`, fontSize:15, outline:"none", marginBottom:12, boxSizing:"border-box", fontFamily:"inherit" }} />
-            <Btn onClick={addQ}>+ Tambah Soal</Btn>
-          </Box>
+            </Box>
+          )}
+
+          {mode === "massal" && (
+            <Box title="Input Massal ⚡" sub="Tempel banyak soal sekaligus. Pisahkan tiap soal dengan SATU BARIS KOSONG.">
+              <div style={{ background:C.paperDeep, borderRadius:12, padding:"12px 14px", marginBottom:12, fontSize:13, color:C.ink, lineHeight:1.6 }}>
+                <b>Format tiap soal:</b><br/>
+                • Baris 1 = pertanyaan<br/>
+                • Baris berikut = opsi jawaban (beri tanda <b>*</b> di depan opsi yang BENAR)<br/>
+                • Baris diawali <b>#</b> = pembahasan (opsional)<br/>
+                • Pisahkan antar-soal dengan baris kosong
+              </div>
+              <div style={{ background:"#FCFAF5", border:`1px dashed ${C.line}`, borderRadius:12, padding:"12px 14px", marginBottom:12, fontSize:13, color:C.inkSoft, whiteSpace:"pre-wrap", fontFamily:"monospace" }}>
+{`Pada miopia, bayangan jatuh di mana?
+*Depan retina
+Tepat di retina
+Belakang retina
+# Bola mata terlalu panjang, fokus di depan retina.
+
+Lensa untuk koreksi miopia?
+Cembung (plus)
+*Cekung (minus)
+Silindris
+# Lensa cekung bersifat divergen.`}
+              </div>
+              <Area placeholder="Tempel soal Anda di sini…" value={bulk} onChange={(e) => setBulk(e.target.value)} rows={10} style={{ fontFamily:"monospace" }} />
+              <Btn kind="amber" onClick={importBulk}>⚡ Proses & Tambahkan Semua</Btn>
+            </Box>
+          )}
+
           <Box title={`Soal Tersimpan (${quiz.length})`}>
             {quiz.length === 0 && <p style={{ color:C.inkSoft, fontSize:14 }}>Belum ada soal.</p>}
             {quiz.map((item, i) => (
               <div key={i} style={{ border:`1px solid ${C.line}`, borderRadius:10, padding:12, marginBottom:8 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", gap:8 }}>
                   <b style={{ fontSize:14 }}>{i + 1}. {item.question}</b>
-                  <button onClick={() => delQ(i)} style={{ background:"none", border:"none", color:C.bad, cursor:"pointer", fontSize:14 }}>Hapus</button>
+                  <span style={{ display:"flex", gap:10, flexShrink:0 }}>
+                    <button onClick={() => startEdit(i)} style={{ background:"none", border:"none", color:C.tealSoft, cursor:"pointer", fontSize:14 }}>Edit</button>
+                    <button onClick={() => delQ(i)} style={{ background:"none", border:"none", color:C.bad, cursor:"pointer", fontSize:14 }}>Hapus</button>
+                  </span>
                 </div>
                 <div style={{ fontSize:13, color:C.inkSoft, marginTop:4 }}>
                   {item.options.map((o, oi) => (
@@ -269,63 +423,46 @@ function Kuis({ data, reload }) {
   );
 }
 
+/* ============================ VOUCHER (dengan per-kategori) ============================ */
 function Voucher({ data, reload }) {
   const [code, setCode] = useState("");
   const [allAccess, setAllAccess] = useState(false);
-  const [picked, setPicked] = useState([]); // id kategori terpilih
-
+  const [picked, setPicked] = useState([]);
   const toggleCat = (id) => setPicked((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
 
   const add = async () => {
     const c = code.trim().toUpperCase();
     if (!c) return alert("Isi kode voucher.");
     if (!allAccess && picked.length === 0) return alert("Pilih minimal 1 kategori, atau centang 'Semua kategori'.");
-    const categories = allAccess ? "all" : picked;
-    await setDoc(doc(db, "vouchers", c), { active: true, categories });
+    await setDoc(doc(db, "vouchers", c), { active: true, categories: allAccess ? "all" : picked });
     setCode(""); setAllAccess(false); setPicked([]); reload();
   };
   const toggleActive = async (v) => { await setDoc(doc(db, "vouchers", v.id), { active: !v.active, categories: v.categories ?? "all" }); reload(); };
   const del = async (id) => { if (!confirm("Hapus voucher?")) return; await deleteDoc(doc(db, "vouchers", id)); reload(); };
-
   const catName = (id) => data.categories.find((c) => c.id === id)?.name || id;
-  const describe = (v) => {
-    if (v.categories === undefined || v.categories === "all") return "Semua kategori";
-    if (Array.isArray(v.categories)) return v.categories.map(catName).join(", ") || "(kosong)";
-    return String(v.categories);
-  };
+  const describe = (v) => (v.categories === undefined || v.categories === "all") ? "Semua kategori" : Array.isArray(v.categories) ? (v.categories.map(catName).join(", ") || "(kosong)") : String(v.categories);
 
   return (
     <div>
       <Box title="Tambah Voucher">
         <Inp placeholder="MMQ-MATA-001" value={code} onChange={(e) => setCode(e.target.value)} />
-
         <label style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12, fontSize:14, fontWeight:600, color:C.teal }}>
-          <input type="checkbox" checked={allAccess} onChange={(e) => setAllAccess(e.target.checked)} />
-          Akses SEMUA kategori
+          <input type="checkbox" checked={allAccess} onChange={(e) => setAllAccess(e.target.checked)} /> Akses SEMUA kategori
         </label>
-
         {!allAccess && (
           <div style={{ marginBottom:12 }}>
-            <p style={{ fontSize:13, color:C.inkSoft, margin:"0 0 8px" }}>Atau pilih kategori yang dibuka voucher ini:</p>
+            <p style={{ fontSize:13, color:C.inkSoft, margin:"0 0 8px" }}>Pilih kategori yang dibuka voucher ini:</p>
             <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
               {data.categories.map((c) => {
                 const on = picked.includes(c.id);
-                return (
-                  <button key={c.id} onClick={() => toggleCat(c.id)}
-                    style={{ border:`1.5px solid ${on ? C.teal : C.line}`, background: on ? C.teal : C.card, color: on ? "#fff" : C.ink,
-                      borderRadius:999, padding:"7px 14px", cursor:"pointer", fontSize:14, fontWeight:500 }}>
-                    {on ? "✓ " : ""}{c.emoji} {c.name}
-                  </button>
-                );
+                return <button key={c.id} onClick={() => toggleCat(c.id)} style={{ border:`1.5px solid ${on?C.teal:C.line}`, background: on?C.teal:C.card, color: on?"#fff":C.ink, borderRadius:999, padding:"7px 14px", cursor:"pointer", fontSize:14, fontWeight:500 }}>{on?"✓ ":""}{c.emoji} {c.name}</button>;
               })}
-              {data.categories.length === 0 && <span style={{ fontSize:13, color:C.inkSoft }}>Belum ada kategori. Tambah kategori dulu.</span>}
+              {data.categories.length === 0 && <span style={{ fontSize:13, color:C.inkSoft }}>Belum ada kategori.</span>}
             </div>
           </div>
         )}
-
         <Btn onClick={add}>+ Tambah Voucher</Btn>
       </Box>
-
       <Box title={`Daftar Voucher (${data.vouchers.length})`}>
         {data.vouchers.length === 0 && <p style={{ color:C.inkSoft, fontSize:14 }}>Belum ada voucher.</p>}
         {data.vouchers.map((v) => (
