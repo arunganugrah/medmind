@@ -1,26 +1,53 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #F6F1E7;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Animasi transisi halaman: muncul lembut dari bawah */
+@keyframes mm-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes mm-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes mm-pop {
+  0%   { opacity: 0; transform: scale(.96); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.mm-page { animation: mm-fade-up .45s cubic-bezier(.22,.61,.36,1) both; }
+.mm-fade { animation: mm-fade .6s ease both; }
+.mm-pop  { animation: mm-pop .4s cubic-bezier(.22,.61,.36,1) both; }
+
+/* Stagger: kartu muncul berurutan */
+.mm-stagger > * { animation: mm-fade-up .5s cubic-bezier(.22,.61,.36,1) both; }
+.mm-stagger > *:nth-child(1) { animation-delay: .04s; }
+.mm-stagger > *:nth-child(2) { animation-delay: .10s; }
+.mm-stagger > *:nth-child(3) { animation-delay: .16s; }
+.mm-stagger > *:nth-child(4) { animation-delay: .22s; }
+.mm-stagger > *:nth-child(5) { animation-delay: .28s; }
+.mm-stagger > *:nth-child(6) { animation-delay: .34s; }
+.mm-stagger > *:nth-child(7) { animation-delay: .40s; }
+.mm-stagger > *:nth-child(8) { animation-delay: .46s; }
+
+/* Kartu naik halus saat disentuh */
+.mm-lift { transition: transform .2s ease, box-shadow .2s ease; }
+.mm-lift:hover { transform: translateY(-3px); box-shadow: 0 10px 30px -12px rgba(14,61,58,.25); }
+
+@media (prefers-reduced-motion: reduce) {
+  .mm-page, .mm-fade, .mm-pop, .mm-stagger > * { animation: none; }
+  .mm-lift:hover { transform: none; }
 }
