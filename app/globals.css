@@ -1,53 +1,42 @@
 @import "tailwindcss";
 
-:root {
-  --paper: #F6F1E7;
-}
-
+:root { --paper: #F6F1E7; }
 * { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--paper); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
-html, body {
-  margin: 0;
-  padding: 0;
-  background: var(--paper);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* Animasi transisi halaman: muncul lembut dari bawah */
-@keyframes mm-fade-up {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes mm-fade {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes mm-pop {
-  0%   { opacity: 0; transform: scale(.96); }
-  100% { opacity: 1; transform: scale(1); }
-}
-
+/* Transisi halaman */
+@keyframes mm-fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes mm-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mm-pop { 0% { opacity: 0; transform: scale(.96); } 100% { opacity: 1; transform: scale(1); } }
 .mm-page { animation: mm-fade-up .45s cubic-bezier(.22,.61,.36,1) both; }
 .mm-fade { animation: mm-fade .6s ease both; }
 .mm-pop  { animation: mm-pop .4s cubic-bezier(.22,.61,.36,1) both; }
 
-/* Stagger: kartu muncul berurutan */
 .mm-stagger > * { animation: mm-fade-up .5s cubic-bezier(.22,.61,.36,1) both; }
-.mm-stagger > *:nth-child(1) { animation-delay: .04s; }
-.mm-stagger > *:nth-child(2) { animation-delay: .10s; }
-.mm-stagger > *:nth-child(3) { animation-delay: .16s; }
-.mm-stagger > *:nth-child(4) { animation-delay: .22s; }
-.mm-stagger > *:nth-child(5) { animation-delay: .28s; }
-.mm-stagger > *:nth-child(6) { animation-delay: .34s; }
-.mm-stagger > *:nth-child(7) { animation-delay: .40s; }
-.mm-stagger > *:nth-child(8) { animation-delay: .46s; }
+.mm-stagger > *:nth-child(1){animation-delay:.04s}.mm-stagger > *:nth-child(2){animation-delay:.10s}
+.mm-stagger > *:nth-child(3){animation-delay:.16s}.mm-stagger > *:nth-child(4){animation-delay:.22s}
+.mm-stagger > *:nth-child(5){animation-delay:.28s}.mm-stagger > *:nth-child(6){animation-delay:.34s}
+.mm-stagger > *:nth-child(7){animation-delay:.40s}.mm-stagger > *:nth-child(8){animation-delay:.46s}
 
-/* Kartu naik halus saat disentuh */
 .mm-lift { transition: transform .2s ease, box-shadow .2s ease; }
 .mm-lift:hover { transform: translateY(-3px); box-shadow: 0 10px 30px -12px rgba(14,61,58,.25); }
 
+/* Kuis interaktif */
+@keyframes mm-correct { 0%{transform:scale(1)} 40%{transform:scale(1.04)} 100%{transform:scale(1)} }
+@keyframes mm-shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-7px)} 40%{transform:translateX(7px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
+@keyframes mm-flash-good { 0%{background:rgba(44,122,85,0)} 30%{background:rgba(44,122,85,.18)} 100%{background:rgba(44,122,85,0)} }
+@keyframes mm-flash-bad  { 0%{background:rgba(178,58,46,0)} 30%{background:rgba(178,58,46,.16)} 100%{background:rgba(178,58,46,0)} }
+@keyframes mm-streak-pop { 0%{transform:scale(.5);opacity:0} 50%{transform:scale(1.15);opacity:1} 100%{transform:scale(1);opacity:1} }
+@keyframes mm-confetti { 0%{transform:translateY(-10vh) rotate(0);opacity:1} 100%{transform:translateY(110vh) rotate(720deg);opacity:0} }
+
+.mm-correct { animation: mm-correct .4s ease; }
+.mm-shake { animation: mm-shake .45s ease; }
+.mm-flash-good { animation: mm-flash-good .7s ease; }
+.mm-flash-bad { animation: mm-flash-bad .7s ease; }
+.mm-streak { animation: mm-streak-pop .45s cubic-bezier(.22,.61,.36,1) both; }
+.mm-confetti-piece { position: fixed; top: 0; width: 10px; height: 14px; border-radius: 2px; animation: mm-confetti 2.2s linear forwards; z-index: 60; pointer-events: none; }
+
 @media (prefers-reduced-motion: reduce) {
-  .mm-page, .mm-fade, .mm-pop, .mm-stagger > * { animation: none; }
+  .mm-page,.mm-fade,.mm-pop,.mm-stagger > *,.mm-correct,.mm-shake,.mm-flash-good,.mm-flash-bad,.mm-streak,.mm-confetti-piece { animation: none; }
   .mm-lift:hover { transform: none; }
 }
