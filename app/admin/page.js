@@ -10,26 +10,52 @@ const C = { paper:"#F6F1E7", paperDeep:"#ECE3D2", ink:"#1C2826", inkSoft:"#5A6B6
 const serif = { fontFamily:"'Fraunces', Georgia, serif" };
 const sans  = { fontFamily:"'Hanken Grotesk', system-ui, sans-serif" };
 
-function toWebpDataUrl(file, maxW = 800) {
+function toWebpDataUrl(file, maxW = 1400) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        const scale = Math.min(1, maxW / img.width);
-        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
-        const canvas = document.createElement("canvas");
-        canvas.width = w; canvas.height = h;
-        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        const LIMIT = 1500 * 1024;
-        let q = 0.7, url = canvas.toDataURL("image/webp", q);
-while (url.length > LIMIT && q > 0.1) { q -= 0.05; url = canvas.toDataURL("image/webp", q); }
-        if (url.length > LIMIT) reject(new Error("Gambar terlalu besar walau sudah dikompres."));
-        else resolve(url);
+        const LIMIT = 700 * 1024;
+
+        const tryEncode = (width, quality) => {
+          const scale = Math.min(1, width / img.width);
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, 0, 0, w, h);
+          const test = canvas.toDataURL("image/webp", 0.1);
+          const fmt = test.startsWith("data:image/webp") ? "image/webp" : "image/jpeg";
+          return canvas.toDataURL(fmt, quality);
+        };
+
+        // Tahap 1: coba kualitas tinggi dulu, turunkan pelan-pelan
+        const qualities = [0.92, 0.85, 0.78, 0.70, 0.62, 0.54, 0.46];
+        for (const q of qualities) {
+          const url = tryEncode(maxW, q);
+          if (url.length <= LIMIT) { resolve(url); return; }
+        }
+
+        // Tahap 2: kalau masih besar, kecilkan dimensi bertahap
+        const widths = [1100, 900, 750, 600, 480];
+        for (const w of widths) {
+          const url = tryEncode(w, 0.72);
+          if (url.length <= LIMIT) { resolve(url); return; }
+        }
+
+        // Tahap 3: paksa muat dengan kualitas minimum
+        const url = tryEncode(400, 0.5);
+        resolve(url); // selalu resolve, tidak pernah reject
       };
-      img.onerror = reject; img.src = e.target.result;
+      img.onerror = reject;
+      img.src = e.target.result;
     };
-    reader.onerror = reject; reader.readAsDataURL(file);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
   });
 }
 const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
