@@ -10,7 +10,7 @@ const C = { paper:"#F6F1E7", paperDeep:"#ECE3D2", ink:"#1C2826", inkSoft:"#5A6B6
 const serif = { fontFamily:"'Fraunces', Georgia, serif" };
 const sans  = { fontFamily:"'Hanken Grotesk', system-ui, sans-serif" };
 
-function toWebpDataUrl(file, maxW = 1000) {
+function toWebpDataUrl(file, maxW = 800) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -21,9 +21,9 @@ function toWebpDataUrl(file, maxW = 1000) {
         const canvas = document.createElement("canvas");
         canvas.width = w; canvas.height = h;
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        const LIMIT = 700 * 1024;
-        let q = 0.8, url = canvas.toDataURL("image/webp", q);
-        while (url.length > LIMIT && q > 0.3) { q -= 0.1; url = canvas.toDataURL("image/webp", q); }
+        const LIMIT = 1500 * 1024;
+        let q = 0.7, url = canvas.toDataURL("image/webp", q);
+while (url.length > LIMIT && q > 0.1) { q -= 0.05; url = canvas.toDataURL("image/webp", q); }
         if (url.length > LIMIT) reject(new Error("Gambar terlalu besar walau sudah dikompres."));
         else resolve(url);
       };
