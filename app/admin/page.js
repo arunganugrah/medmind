@@ -135,16 +135,30 @@ function MindmapViewer({ src }) {
     <>
       {/* Thumbnail — langsung bisa klik untuk buka */}
       <div
-        onClick={openViewer}
-        style={{ cursor: "zoom-in", position: "relative", borderRadius: 12, overflow: "hidden" }}
+        style={{ cursor: "grab", position: "relative", borderRadius: 12, overflow: "hidden" }}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onClick={() => { if (!dragging) openViewer(); }}
       >
         <img
-          src={src}
-          alt="Mind Map"
-          draggable={false}
-          onContextMenu={(e) => e.preventDefault()}
-          style={{ width: "100%", display: "block", borderRadius: 12 }}
-        />
+        src={src}
+        alt="Mind Map"
+        draggable={false}
+        onContextMenu={(e) => e.preventDefault()}
+        style={{
+          width: "100%",
+          display: "block",
+          borderRadius: 12,
+          transform: `translate(${pos.x}px, ${pos.y}px)`,
+          transition: dragging ? "none" : "transform 0.1s",
+          userSelect: "none",
+        }}
+      />
         <div style={{
           position: "absolute", bottom: 10, right: 10,
           background: "rgba(14,61,58,0.7)", color: "#fff",
