@@ -28,6 +28,7 @@ function toWebpDataUrl(file, maxW = 1400) {
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = "high";
           ctx.drawImage(img, 0, 0, w, h);
+          drawWatermark(ctx, w, h);
           const test = canvas.toDataURL("image/webp", 0.1);
           const fmt = test.startsWith("data:image/webp") ? "image/webp" : "image/jpeg";
           return canvas.toDataURL(fmt, quality);
@@ -59,6 +60,33 @@ function toWebpDataUrl(file, maxW = 1400) {
   });
 }
 const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
+const drawWatermark = (ctx, w, h) => {
+  const text = "© MedMind";
+  const fontSize = Math.max(14, Math.round(w * 0.028));
+  const padding = fontSize * 0.6;
+
+  ctx.save();
+  ctx.font = `700 ${fontSize}px sans-serif`;
+
+  const tw = ctx.measureText(text).width;
+  const bw = tw + padding * 2;
+  const bh = fontSize + padding * 2;
+
+  // Kotak teal di pojok kanan bawah
+  ctx.fillStyle = "rgba(14, 61, 58, 0.55)";
+  ctx.beginPath();
+  ctx.roundRect(w - bw - 10, h - bh - 10, bw, bh, 6);
+  ctx.fill();
+
+  // Teks putih di dalam kotak
+  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, w - bw / 2 - 10, h - bh / 2 - 10);
+
+  ctx.restore();
+};
 
 export default function AdminPage() {
   const router = useRouter();
