@@ -62,31 +62,168 @@ function toWebpDataUrl(file, maxW = 1400) {
 const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 const drawWatermark = (ctx, w, h) => {
-  const text = "© MedMind";
-  const fontSize = Math.max(14, Math.round(w * 0.028));
-  const padding = fontSize * 0.6;
+  const text = "© MedMind – Property of MedMind";
+  const fontSize = Math.max(13, Math.round(w * 0.022));
 
   ctx.save();
-  ctx.font = `700 ${fontSize}px sans-serif`;
-
-  const tw = ctx.measureText(text).width;
-  const bw = tw + padding * 2;
-  const bh = fontSize + padding * 2;
-
-  // Kotak teal di pojok kanan bawah
-  ctx.fillStyle = "rgba(14, 61, 58, 0.55)";
-  ctx.beginPath();
-  ctx.roundRect(w - bw - 10, h - bh - 10, bw, bh, 6);
-  ctx.fill();
-
-  // Teks putih di dalam kotak
-  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.font = `600 ${fontSize}px sans-serif`;
+  ctx.fillStyle = "rgba(14, 61, 58, 0.13)";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, w - bw / 2 - 10, h - bh / 2 - 10);
 
+  const tileW = w * 0.55;
+  const tileH = h * 0.22;
+
+  for (let x = -tileW; x < w + tileW; x += tileW) {
+    for (let y = -tileH; y < h + tileH; y += tileH) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(-Math.PI / 6);
+      ctx.fillText(text, 0, 0);
+      ctx.restore();
+    }
+  }
   ctx.restore();
 };
+
+function MindmapViewer({ src }) {
+  const [zoomed, setZoomed] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragStart = useRef(null);
+  const posRef = useRef({ x: 0, y: 0 });
+
+  // Reset posisi setiap buka viewer
+  const openViewer = () => {
+    setPos({ x: 0, y: 0 });
+    posRef.current = { x: 0, y: 0 };
+    setZoomed(true);
+  };
+
+  // Mouse
+  const onMouseDown = (e) => {
+    e.preventDefault();
+    dragStart.current = { mx: e.clientX, my: e.clientY, px: posRef.current.x, py: posRef.current.y };
+    setDragging(true);
+  };
+  const onMouseMove = (e) => {
+    if (!dragStart.current) return;
+    const nx = dragStart.current.px + (e.clientX - dragStart.current.mx);
+    const ny = dragStart.current.py + (e.clientY - dragStart.current.my);
+    posRef.current = { x: nx, y: ny };
+    setPos({ x: nx, y: ny });
+  };
+  const onMouseUp = () => { dragStart.current = null; setDragging(false); };
+
+  // Touch (mobile)
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    dragStart.current = { mx: t.clientX, my: t.clientY, px: posRef.current.x, py: posRef.current.y };
+  };
+  const onTouchMove = (e) => {
+    if (!dragStart.current) return;
+    e.preventDefault();
+    const t = e.touches[0];
+    const nx = dragStart.current.px + (t.clientX - dragStart.current.mx);
+    const ny = dragStart.current.py + (t.clientY - dragStart.current.my);
+    posRef.current = { x: nx, y: ny };
+    setPos({ x: nx, y: ny });
+  };
+  const onTouchEnd = () => { dragStart.current = null; };
+
+  return (
+    <>
+      {/* Thumbnail — langsung bisa klik untuk buka */}
+      <div
+        onClick={openViewer}
+        style={{ cursor: "zoom-in", position: "relative", borderRadius: 12, overflow: "hidden" }}
+      >
+        <img
+          src={src}
+          alt="Mind Map"
+          draggable={false}
+          onContextMenu={(e) => e.preventDefault()}
+          style={{ width: "100%", display: "block", borderRadius: 12 }}
+        />
+        <div style={{
+          position: "absolute", bottom: 10, right: 10,
+          background: "rgba(14,61,58,0.7)", color: "#fff",
+          fontSize: 12, padding: "4px 10px", borderRadius: 999,
+          pointerEvents: "none"
+        }}>
+          🔍 Klik & geser untuk jelajahi
+        </div>
+      </div>
+
+      {/* Fullscreen overlay dengan geser */}
+      {zoomed && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 999,
+            background: "rgba(0,0,0,0.88)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            overflow: "hidden",
+          }}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onMouseLeave={onMouseUp}
+        >
+          {/* Klik area gelap = tutup, tapi jangan tutup saat drag */}
+          <div
+            onClick={() => { if (!dragging) setZoomed(false); }}
+            style={{ position: "absolute", inset: 0 }}
+          />
+
+          <img
+            src={src}
+            alt="Mind Map"
+            draggable={false}
+            onContextMenu={(e) => e.preventDefault()}
+            onMouseDown={onMouseDown}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            style={{
+              position: "relative",
+              maxWidth: "92vw",
+              maxHeight: "88vh",
+              borderRadius: 12,
+              objectFit: "contain",
+              transform: `translate(${pos.x}px, ${pos.y}px)`,
+              cursor: dragging ? "grabbing" : "grab",
+              userSelect: "none",
+              touchAction: "none",
+              zIndex: 1,
+            }}
+          />
+
+          {/* Tombol tutup */}
+          <button
+            onClick={() => setZoomed(false)}
+            style={{
+              position: "absolute", top: 16, right: 20,
+              background: "rgba(255,255,255,0.15)", border: "none",
+              color: "#fff", fontSize: 22, width: 40, height: 40,
+              borderRadius: "50%", cursor: "pointer", zIndex: 2,
+              display: "flex", alignItems: "center", justifyContent: "center"
+            }}
+          >✕</button>
+
+          {/* Hint geser */}
+          <div style={{
+            position: "absolute", bottom: 20, left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(255,255,255,0.12)", color: "#fff",
+            fontSize: 13, padding: "6px 16px", borderRadius: 999,
+            pointerEvents: "none", zIndex: 2
+          }}>
+            Geser gambar · Klik area gelap untuk tutup
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 export default function AdminPage() {
   const router = useRouter();
