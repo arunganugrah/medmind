@@ -89,18 +89,31 @@ const drawWatermark = (ctx, w, h) => {
 function MindmapViewer({ src }) {
   const [zoomed, setZoomed] = useState(false);
   const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef(null);
   const posRef = useRef({ x: 0, y: 0 });
+  const scaleRef = useRef(1);
 
-  // Reset posisi setiap buka viewer
   const openViewer = () => {
     setPos({ x: 0, y: 0 });
     posRef.current = { x: 0, y: 0 };
+    setScale(1);
+    scaleRef.current = 1;
     setZoomed(true);
   };
+  const closeViewer = () => setZoomed(false);
 
-  // Mouse
+  // Scroll wheel = zoom in/out (PC)
+  const onWheel = (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.15 : 0.15;
+    const next = Math.min(4, Math.max(1, scaleRef.current + delta));
+    scaleRef.current = next;
+    setScale(next);
+  };
+
+  // Mouse drag
   const onMouseDown = (e) => {
     e.preventDefault();
     dragStart.current = { mx: e.clientX, my: e.clientY, px: posRef.current.x, py: posRef.current.y };
@@ -115,52 +128,69 @@ function MindmapViewer({ src }) {
   };
   const onMouseUp = () => { dragStart.current = null; setDragging(false); };
 
-  // Touch (mobile)
+  // Touch (mobile) — pinch zoom + drag
+  const pinchStart = useRef(null);
   const onTouchStart = (e) => {
-    const t = e.touches[0];
-    dragStart.current = { mx: t.clientX, my: t.clientY, px: posRef.current.x, py: posRef.current.y };
+    if (e.touches.length === 2) {
+      const [a, b] = e.touches;
+      const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      pinchStart.current = { dist, scale: scaleRef.current };
+    } else {
+      const t = e.touches[0];
+      dragStart.current = { mx: t.clientX, my: t.clientY, px: posRef.current.x, py: posRef.current.y };
+    }
   };
   const onTouchMove = (e) => {
-    if (!dragStart.current) return;
     e.preventDefault();
+    if (e.touches.length === 2 && pinchStart.current) {
+      const [a, b] = e.touches;
+      const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      const ratio = dist / pinchStart.current.dist;
+      const next = Math.min(4, Math.max(1, pinchStart.current.scale * ratio));
+      scaleRef.current = next;
+      setScale(next);
+      return;
+    }
+    if (!dragStart.current) return;
     const t = e.touches[0];
     const nx = dragStart.current.px + (t.clientX - dragStart.current.mx);
     const ny = dragStart.current.py + (t.clientY - dragStart.current.my);
     posRef.current = { x: nx, y: ny };
     setPos({ x: nx, y: ny });
   };
-  const onTouchEnd = () => { dragStart.current = null; };
+  const onTouchEnd = () => { dragStart.current = null; pinchStart.current = null; };
 
   return (
     <>
-      {/* Thumbnail — langsung bisa klik untuk buka */}
+      {/* Thumbnail */}
       <div
-  onClick={openViewer}
-  style={{ cursor: "zoom-in", position: "relative", borderRadius: 12 }}
->
-  <img
-    src={src}
-    alt="Mind Map"
-    draggable={false}
-    onContextMenu={(e) => e.preventDefault()}
-    style={{
-      width: "100%",
-      display: "block",
-      borderRadius: 12,
-      userSelect: "none",
-    }}
-  />
-  <div style={{
-    position: "absolute", bottom: 10, right: 10,
-    background: "rgba(14,61,58,0.7)", color: "#fff",
-    fontSize: 12, padding: "4px 10px", borderRadius: 999,
-    pointerEvents: "none"
-  }}>
-    🔍 Klik untuk buka & geser
-  </div>
-</div>
+        onClick={openViewer}
+        style={{ cursor: "zoom-in", position: "relative", borderRadius: 12 }}
+      >
+        <img
+          src={src}
+          alt="Mind Map"
+          draggable={false}
+          onContextMenu={(e) => e.preventDefault()}
+          style={{
+            width: "100%",
+            display: "block",
+            borderRadius: 12,
+            userSelect: "none",
+            pointerEvents: "none",
+          }}
+        />
+        <div style={{
+          position: "absolute", bottom: 10, right: 10,
+          background: "rgba(14,61,58,0.7)", color: "#fff",
+          fontSize: 12, padding: "4px 10px", borderRadius: 999,
+          pointerEvents: "none"
+        }}>
+          🔍 Klik untuk buka & geser
+        </div>
+      </div>
 
-      {/* Fullscreen overlay dengan geser */}
+      {/* Fullscreen overlay */}
       {zoomed && (
         <div
           style={{
@@ -172,10 +202,10 @@ function MindmapViewer({ src }) {
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseUp}
+          onWheel={onWheel}
         >
-          {/* Klik area gelap = tutup, tapi jangan tutup saat drag */}
           <div
-            onClick={() => { if (!dragging) setZoomed(false); }}
+            onClick={() => { if (!dragging) closeViewer(); }}
             style={{ position: "absolute", inset: 0 }}
           />
 
@@ -194,7 +224,8 @@ function MindmapViewer({ src }) {
               maxHeight: "88vh",
               borderRadius: 12,
               objectFit: "contain",
-              transform: `translate(${pos.x}px, ${pos.y}px)`,
+              transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`,
+              transition: dragging ? "none" : "transform 0.05s linear",
               cursor: dragging ? "grabbing" : "grab",
               userSelect: "none",
               touchAction: "none",
@@ -202,9 +233,8 @@ function MindmapViewer({ src }) {
             }}
           />
 
-          {/* Tombol tutup */}
           <button
-            onClick={() => setZoomed(false)}
+            onClick={closeViewer}
             style={{
               position: "absolute", top: 16, right: 20,
               background: "rgba(255,255,255,0.15)", border: "none",
@@ -214,7 +244,6 @@ function MindmapViewer({ src }) {
             }}
           >✕</button>
 
-          {/* Hint geser */}
           <div style={{
             position: "absolute", bottom: 20, left: "50%",
             transform: "translateX(-50%)",
@@ -222,7 +251,7 @@ function MindmapViewer({ src }) {
             fontSize: 13, padding: "6px 16px", borderRadius: 999,
             pointerEvents: "none", zIndex: 2
           }}>
-            Geser gambar · Klik area gelap untuk tutup
+            Scroll untuk zoom · Geser gambar · Klik area gelap untuk tutup
           </div>
         </div>
       )}
